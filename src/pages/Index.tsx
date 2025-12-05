@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 const slides = [
   {
@@ -160,6 +162,8 @@ const slides = [
 
 export default function Index() {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isExporting, setIsExporting] = useState(false);
+  const slideRef = useRef<HTMLDivElement>(null);
 
   const nextSlide = () => {
     if (currentSlide < slides.length - 1) {
@@ -177,12 +181,68 @@ export default function Index() {
     setCurrentSlide(index);
   };
 
+  const exportToPDF = async () => {
+    if (!slideRef.current) return;
+    
+    setIsExporting(true);
+    const pdf = new jsPDF('landscape', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    for (let i = 0; i < slides.length; i++) {
+      setCurrentSlide(i);
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const canvas = await html2canvas(slideRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#f9fafb'
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+
+      if (i > 0) pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, Math.min(imgHeight, pageHeight));
+    }
+
+    pdf.save('Презентация_История_Интернета.pdf');
+    setIsExporting(false);
+    setCurrentSlide(0);
+  };
+
   const slide = slides[currentSlide];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className={`min-h-[80vh] bg-gradient-to-br ${slide.gradient} rounded-3xl shadow-2xl p-8 md:p-12 lg:p-16 animate-fade-in`}>
+        {isExporting && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+            <Card className="bg-white p-8 text-center space-y-4">
+              <div className="animate-spin mx-auto">
+                <Icon name="Loader2" size={48} className="text-primary" />
+              </div>
+              <h3 className="text-xl font-bold">Создаю PDF...</h3>
+              <p className="text-gray-600">Слайд {currentSlide + 1} из {slides.length}</p>
+            </Card>
+          </div>
+        )}
+
+        <div className="flex justify-end mb-4">
+          <Button
+            onClick={exportToPDF}
+            disabled={isExporting}
+            className="bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+            size="lg"
+          >
+            <Icon name="Download" size={20} />
+            Скачать PDF
+          </Button>
+        </div>
+
+        <div ref={slideRef} className={`min-h-[80vh] bg-gradient-to-br ${slide.gradient} rounded-3xl shadow-2xl p-8 md:p-12 lg:p-16 animate-fade-in`}>
           {slide.type === 'title' && (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-8">
               <div className="space-y-4">
@@ -495,6 +555,8 @@ export default function Index() {
           )}
         </div>
 
+        {!isExporting && (
+          <>
         <div className="flex items-center justify-between mt-8">
           <Button
             onClick={prevSlide}
@@ -537,6 +599,8 @@ export default function Index() {
         <div className="text-center mt-4 text-gray-600">
           Слайд {currentSlide + 1} из {slides.length}
         </div>
+          </>
+        )}
       </div>
     </div>
   );
